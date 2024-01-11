@@ -1,0 +1,14 @@
+{
+  "name": "modbuskit",
+  "version": "1.0.0",
+  "description": "给modbus及寄存器表协议用的库",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "modbus"
+  ],
+  "author": "hut",
+  "license": "MIT"
+}
