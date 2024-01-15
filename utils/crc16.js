@@ -1,9 +1,9 @@
 "use strict";
 /**
- * Calculates the buffers CRC16.
+ * 计算数据的 CRC16.
  *
- * @param {Buffer} buffer the data buffer.
- * @return {number} the calculated CRC16.
+ * @param {Buffer} buffer 需要计算的数据.
+ * @return {number} 计算数据的 CRC16 结果.
  */
 module.exports = function crc16(buffer) {
     let crc = 0xFFFF;
