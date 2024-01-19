@@ -13,3 +13,9 @@ test("Modbus CRC16", () => {
     const crc = crc16(buffer);
     expect(crc).toBe(33806);
 });
+
+test("Modbus CRC16", () => {
+    const buffer = Buffer.from("110100130025", "hex");
+    const crc = crc16(buffer);
+    expect(crc).toBe(33806);
+});

@@ -1,10 +1,12 @@
 "use strict";
+
 /**
  * 计算数据的 CRC16.
  *
  * @param {Buffer} buffer 需要计算的数据.
  * @return {number} 计算数据的 CRC16 结果.
  */
+
 module.exports = function crc16(buffer) {
     let crc = 0xFFFF;
     let odd;
@@ -23,4 +25,3 @@ module.exports = function crc16(buffer) {
 
     return crc;
 }
-

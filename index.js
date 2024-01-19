@@ -1,12 +1,21 @@
 
 const crc16 = require("./utils/crc16");
 const xor = require("./utils/xor");
-const aes = require("../utils/aes");
+const aes = require("./utils/aes");
+
+const datatools = require("./utils/datatools");
 
 const ConnectionType = Object.freeze({
     BLE: 0,
     TCP: 1
-  })
+})
+
+const FunctionCode = Object.freeze({
+    penetrate17: 0x17,
+    write18: 0x18,
+    read19: 0x19,
+    fileTransfer26: 0x26
+})
 
 const SERIALNUMBER_LENGTH = 10;
 const XOR_KEY = "Growatt";
@@ -34,15 +43,51 @@ class ModbusPackage {
     /**
      * Growatt数服协议包
      *
+     * @param {object} obj   初始化信息，可以是transactId，functionCode及data三个参数，或者是机器返回的原始数据
      * @param {UInt16} transactId   通讯编号 0x0004
-     * @param {UInt16} protocolId   功能码
-     * @param {UInt16} length       数据长度
-     * @param {UInt8} deviceAdress  设备地址 单元标识符 (UnitId , 1 Bytes)
-     * @param {UInt8} functionCode 功能码
+     * @param {UInt8} functionCode  功能码
      * @param {Buffer} data         数据区
      */
 
-    constructor(transactId = 0x0004, functionCode, data) {
+    constructor(obj) {
+        if (obj instanceof Buffer) {
+            this._constructorBuffer(obj)
+        } else if (typeof obj === 'object' && obj !== null) {
+            this._constructorParms(obj.transactId, obj.functionCode, obj.data)
+        }
+    }
+
+    // 从机器返回的数据初始化包
+    _constructorBuffer(buf) {
+        if (buf.length < 9) {
+            throw new Error('原始数据不正确');
+        }
+
+        // crc校验
+        if (this.checkCRC(buf) == false) {
+            throw new Error('CRC校验失败');
+        }
+
+        this._rawData = buf
+        this.transactId = buf.readUint16BE(0)
+        this.protocolId = buf.readUint16BE(2)
+        this.length = buf.readUint16BE(4)
+        this.deviceAdress = buf.readUint8(6)
+        this.functionCode = buf.readUint8(7)
+        
+        // 根据返回的包更新协议版本号
+        // MODBUS_VERSION = this.protocolId
+        
+        if (8+this.length-3 > buf.length) {
+            throw new Error(`原始数据长度不对, 长度应该位：${this.length}, 但实际数据长度:${dataArray.count}`);
+        }
+
+        let crypData = buf.slice(8, -2)
+        this.data = this.decrypt(crypData)
+    }
+
+    // 根据自定包信息初始化包
+    _constructorParms(transactId = 0x0004, functionCode, data) {
         this.transactId = transactId;
         this.protocolId = MODBUS_VERSION;
         this.length = 0x0000;
@@ -51,17 +96,9 @@ class ModbusPackage {
         this.data = data;
         this.length = data.length;
     }
-
-    extractData(buf) {
-        const buf = Buffer.alloc(8 + this.data.length + 2);
-        this.transactId = buf.readUint16BE(0)
-        this.protocolId = buf.readUint16BE(2)
-        this.data.length = buf.readUint16BE(4)
-        this.deviceAdress = buf.readUint8(6)
-        this.functionCode = buf.readUint8(7)
-    }
     
-    asData(next) {
+    // 将当前包组装成可与机器通讯用的数据包流
+    asData() {
 
         // 当前属性转二进制数据包前的合法性检查
         if (typeof this.data === "undefined" || typeof this.functionCode === "undefined") {
@@ -82,16 +119,14 @@ class ModbusPackage {
         // 拼接数据区
         if (CONNECTION_TYPE === ConnectionType.BLE) {
             // 走蓝牙的数据处理
-            let encryptedData
-            if (MODBUS_VERSION > 5) {
-                encryptedData = aes.encrypt(this.data)
-            } else {
-                encryptedData = xor(this.data, XOR_KEY)
-            }
+            let encryptedData = this.encrpty(this.data)
+
+            // 写入数据区
             for (i = 0; i < encryptedData.length; i++) {
                 buf.writeUInt8(encryptedData[i], 7 + i);
             }
 
+            // 另一种写入数据区的方法
             // for (i = 0; i < encryptedData.length; i++) {
             //     // 在将要写的区域写入0
             //     buf.writeUInt8(0, 7 + i);
@@ -105,92 +140,70 @@ class ModbusPackage {
             // }
         } else {
             // 走网络的或其它的数据处理
-
         }
 
         // 拼接CRC
-        buf.writeUInt16BE(crc16(buf));
+        const cCrc = crc16(buf);
+        this.crc = cCrc;
+        buf.writeUInt16BE(cCrc);
         return buf;
     }
-    
-    _assembleCRC(packageData) {
-        // let dataWithCRC = packageData;
-        // let crc = GTModbusEncryption.CRC16(new Uint8Array(packageData), 0xFFFF);
-        // if (this.functionCode === GTModbusFunctionCode.penetrate_0x17) {
-        //     // No need to generate CRC for penetrate command
-        //     crc = 0;
-        // }
-        // if (crc !== 0) {
-        //     dataWithCRC.push((crc >> 8) & 0xFF, crc & 0xFF);
-        // }
-        // return dataWithCRC;
-    }
-    
-    _checkCRCValid(checkData) {
-        // const dataArray = checkData;
-        // if (dataArray.length <= 8) {
-        //     return false;
-        // }
-        // this.transactId = (new Uint8Array(dataArray.slice(0, 2))).uint16;
-        // this.protocolId = (new Uint8Array(dataArray.slice(2, 4))).uint16;
-        // const length = (new Uint8Array(dataArray.slice(4, 6))).uint16;
-        // this.length = length;
-        // this.slaveAdress = dataArray[6];
-        // this.functionCode = GTModbusFunctionCode[dataArray[7]] || .unkonw;
-        // if (this.functionCode === GTModbusFunctionCode.penetrate_0x17) {
-        //     // No need for CRC validation for penetrate command
-        //     return true;
-        // } else {
-        //     // CRC validation
-        //     const packageCRC = (new Uint8Array(dataArray.slice(dataArray.length - 2, dataArray.length))).uint16;
-        //     const checkData = new Uint8Array(dataArray.slice(0, dataArray.length - 3));
-        //     const caculateCRC = GTModbusEncryption.CRC16(checkData);
-        //     if (packageCRC !== 0 && packageCRC === caculateCRC) {
-        //         return true;
+
+    /// 提取包中的有效数据
+    extract(buf) {
+        // const buf = Buffer.alloc(8 + this.data.length + 2);
+        // this.transactId = buf.readUint16BE(0)
+        // this.protocolId = buf.readUint16BE(2)
+        // this.length = buf.readUint16BE(4)
+        // this.deviceAdress = buf.readUint8(6)
+        // this.functionCode = buf.readUint8(7)
+
+        // // 拼接数据区
+        // if (CONNECTION_TYPE === ConnectionType.BLE) {
+        //     if (MODBUS_VERSION > 5) {
+        //         // 更新总长度
         //     }
-        //     return false;
+        //     // 数据区解密
         // }
     }
     
-    _encrpty(targetData) {
-        // let encryptedData = targetData;
-        // if (CONNECTION_TYPE == ConnectionType.BLE) {
-        //     if (MODBUS_VERSION > 0x0005) {
-        //         // Encrypt data (AES128)
-        //         // Encrypt data (AES128)
-        //         console.log("Data before encryption (AES128):", targetData);
-        //         const enedData = GTModbusEncryption.aesGrowattEncrypt(targetData);
-        //         if (enedData) {
-        //             encryptedData = enedData;
-        //         }
-        //         console.log("Data after encryption (AES128):", encryptedData);
-        //     } else {
-        //         // Encrypt data (XOR with key)
-        //         console.log("数据加密前-XOR:", targetData);
-        //         encryptedData = xor(targetData, k_XOR_KEY);
-        //         console.log("数据加密前后-XOR:", encryptedData);
-        //     }
-        // }
-        // return encryptedData;
+    checkCRC(buf) {
+        if (buf.length < 3) {
+            return false
+        }
+        const fCrc = buf.slice(-2).readUint16BE(0)
+        const cCrc = crc16(buf.slice(0, -2));
+        if (fCrc == cCrc) {
+            this.crc = fCrc;
+        }
+        return fCrc == cCrc;
+    }
+
+    /// 获取当前包的crc, 因要将包组装完整才能计算crc,所以这里调用组装包的方法asData
+    getCRC() {
+        const data = this.asData
+        return this.crc
     }
     
-    _decrypt(targetData) {
-        // let decryptedData = targetData;
-        // if (k_ConnectionType === .bluetooth) {
-        //     if (k_GTModbus_Version <= 5) {
-        //         // Decrypt data (XOR with key)
-        //         console.log("Data before decryption (XOR with key):", targetData);
-        //         decryptedData = GTModbusEncryption.XOR(targetData, k_XOR_KEY);
-        //         console.log("Data after decryption (XOR with key):", decryptedData);
-        //     } else if (k_GTModbus_Version > 5) {
-        //         console.log("Data before decryption (AES128):", targetData);
-        //         const deedData = GTModbusEncryption.aesGrowattDecrypt(targetData);
-        //         if (deedData) {
-        //             decryptedData = deedData;
-        //         }
-        //         console.log("Data after decryption (AES128):", decryptedData);
-        //     }
-        // }
-        // return decryptedData;
+    encrpty(buf) {
+        let encryptedData
+        if (MODBUS_VERSION > 5) {
+            encryptedData = aes.encrypt(buf)
+        } else {
+            encryptedData = xor(buf, XOR_KEY)
+        }
+        return encryptedData;
+    }
+    
+    decrypt(buf) {
+        let decryptedData
+        if (MODBUS_VERSION > 5) {
+            decryptedData = aes.decrypt(buf)
+        } else {
+            decryptedData = xor(buf, XOR_KEY)
+        }
+        return decryptedData;
     }
 }
+
+module.exports = ModbusPackage;

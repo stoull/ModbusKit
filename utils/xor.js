@@ -19,3 +19,4 @@ module.exports = function xor(buffer, key) {
     }
     return resultBytes;
 }
+
