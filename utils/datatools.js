@@ -10,8 +10,8 @@ const endian = require("./endian");
 
 function uint16ToHexString(value) {
     if (endian.checkEndian() == endian.Endian.little) {
-        const low = value >> 8
-        const high = value & 0xff
+        const high = value >> 8
+        const low = value & 0xff
         return Buffer(Uint8Array.from([high, low]).buffer).toString('hex')
     } else {
         return Buffer(Uint16Array.from([value]).buffer).toString('hex')
