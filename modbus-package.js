@@ -5,39 +5,7 @@ const aes = require("./utils/aes");
 
 const datatools = require("./utils/datatools");
 
-const ConnectionType = Object.freeze({
-    BLE: 0,
-    TCP: 1
-})
-
-const FunctionCode = Object.freeze({
-    penetrate17: 0x17,
-    write18: 0x18,
-    read19: 0x19,
-    fileTransfer26: 0x26
-})
-
-const SERIALNUMBER_LENGTH = 10;
-const XOR_KEY = "Growatt";
-
-var MODBUS_VERSION = 0x0005
-var CONNECTION_TYPE = ConnectionType.BLE // 认为Port.BLE，像本地蓝牙于网络传输的数服协议包会有不同
-
-const modbusErrorMessages = [
-    "未知错误",
-    "数据不合法",
-    "Illegal data address (register not supported by device)",
-    "Illegal data value (value cannot be written to this register)",
-    "Slave device failure (device reports internal error)",
-    "Acknowledge (requested data will be available later)",
-    "Slave device busy (retry request again later)"
-];
-
-const ModbusPackageError = function(message) {
-    Error.captureStackTrace(this, this.constructor);
-    this.name = this.constructor.name;
-    this.message = message;
-};
+const constant = require("./modbus-constant");
 
 class ModbusPackage {
     /**
@@ -143,9 +111,9 @@ class ModbusPackage {
         }
 
         // 拼接CRC
-        const cCrc = crc16(buf.slice(0, -2));
+        const cCrc = crc16(buf);
         this.crc = cCrc;
-        buf.writeUInt16LE(cCrc);
+        buf.writeUInt16BE(cCrc);
         return buf;
     }
 
@@ -204,62 +172,6 @@ class ModbusPackage {
         }
         return decryptedData;
     }
-}
-
-class ModbusPackage0x17 extends ModbusPackage {
-    /**
-     * 命令码0x17,对应的数据包
-     * 该功能码为完全透传命令：由手机app发送该命令码，数据采集器收到该命令码后，取出“透传数据区”，不作协议转换地透传给光伏设备；
-     * 同时，对光伏设备返回的数据同样不作任何解析，直接当作“透传数据区”封装在MODBUS_ TCP协议中响应给APP。
-     *
-     * @param {object} obj   初始化信息，可以是transactId，functionCode及data三个参数，或者是机器返回的原始数据
-     * @param {string} serial   通讯编号 0x0004
-     * @param {UInt8} functionCode  功能码
-     * @param {Buffer} data         数据区
-     */
-    constructor(obj) {
-        super(obj);
-        if (obj instanceof Buffer) {
-            this._constructorBuffer(obj)
-        } else if (typeof obj === 'object' && obj !== null) {
-            this._constructorParms(obj.transactId, obj.functionCode, obj.data)
-        }
-
-        this._rawData = buf
-        // 数据采集器序列号
-        this.serial = buf.readUint16BE(0)
-        // 透传数据区的数据长度
-        this.penetrateDataLenth = buf.readUint16BE(2)
-        // 透传数据区 数据内容参见逆变器协议
-        this.penetrateData = buf.readUint16BE(4)
-        // 查询包
-        this.reqPackage = buf.readUint8(6)
-        // 回复包
-        this.resPackage = buf.readUint8(7)
-    }
-
-    /**
-     * 读取设备的03 holding或04 input寄存器包
-     *
-     * @param {InverterFunctionCode} readType   
-     * @param {UInt16} startIndex   要读取的起始的寄存器地址
-     * @param {UInt16} count        要读取的的长度
-     */
-    static read(readType, startIndex, count) {
-
-    }
-
-    /**
-     * 设置设备的寄存器数据包，可能是功能码6或者16
-     *
-     * @param {UInt16} startIndex   要设置的寄存器开始位置
-     * @param {UInt16} count        要设置的寄存器数目
-     * @param {Uint16Array} count        要设置的寄存器数据，按寄存器顺序排列
-     */
-    static write(startIndex, count, data) {
-    
-    }
-
 }
 
 module.exports = ModbusPackage;

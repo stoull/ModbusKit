@@ -10,6 +10,6 @@ test("Modbus Package", () => {
     const pak = new ModbusPackage(buf)
     
     expect(pak.checkCRC(buf)).toBe(true);
-    expect(datatools.uint16ToHexString(pak.crc)).toBe('9ad5');
+    expect(datatools.uint16ToBEHexString(pak.crc)).toBe('9ad5');
 
 });

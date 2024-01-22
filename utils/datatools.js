@@ -1,23 +1,17 @@
 "use strict";
 
-const endian = require("./endian");
-
 /**
  * 将Uint16转成Hex String
  *
  * @param {Uint16} value 需要计算的数值.
  */
 
-function uint16ToHexString(value) {
-    if (endian.checkEndian() == endian.Endian.little) {
-        const high = value >> 8
-        const low = value & 0xff
-        return Buffer(Uint8Array.from([high, low]).buffer).toString('hex')
-    } else {
-        return Buffer(Uint16Array.from([value]).buffer).toString('hex')
-    }
+function uint16ToBEHexString(value) {
+    const high = value >> 8
+    const low = value & 0xff
+    return Buffer(Uint8Array.from([high, low]).buffer).toString('hex')
 }
 
 module.exports = {
-    uint16ToHexString: uint16ToHexString
+    uint16ToBEHexString: uint16ToBEHexString
 };

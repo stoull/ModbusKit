@@ -24,6 +24,6 @@ test("CRC16", () => {
 test("Modbus CRC16", () => {
     const buffer = Buffer.from("110100130025", "hex");
     const crc = crc16(buffer);
-    const crcHex = datatools.uint16ToHexString(crc);
+    const crcHex = datatools.uint16ToBEHexString(crc);
     expect(crcHex).toBe('840e');
 });
